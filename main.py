@@ -1,268 +1,232 @@
-import random
 import pygame
-
+import random
 pygame.init()
 
-WIDTH = 1000
-HEIGHT = 600
+# initial set up
+WIDTH = 400
+HEIGHT = 500
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
-surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-pygame.display.set_caption('Jetpack Joyride in Python!')
-fps = 60
+pygame.display.set_caption('2048')
 timer = pygame.time.Clock()
-font = pygame.font.Font('freesansbold.ttf', 32)
-bg_color = (128, 128, 128)
-lines = [0, WIDTH / 4, 2 * WIDTH / 4, 3 * WIDTH / 4]
-game_speed = 3
-pause = False
-init_y = HEIGHT - 130
-player_y = init_y
-booster = False
-counter = 0
-y_velocity = 0
-gravity = 0.4
-new_laser = True
-laser = []
-distance = 0
-restart_cmd = False
-new_bg = 0
+fps = 60
+font = pygame.font.Font('freesansbold.ttf', 24)
 
-# rocket variables
-rocket_counter = 0
-rocket_active = False
-rocket_delay = 0
-rocket_coords = []
+# 2048 game color library
+colors = {0: (204, 192, 179),
+          2: (238, 228, 218),
+          4: (237, 224, 200),
+          8: (242, 177, 121),
+          16: (245, 149, 99),
+          32: (246, 124, 95),
+          64: (246, 94, 59),
+          128: (237, 207, 114),
+          256: (237, 204, 97),
+          512: (237, 200, 80),
+          1024: (237, 197, 63),
+          2048: (237, 194, 46),
+          'light text': (249, 246, 242),
+          'dark text': (119, 110, 101),
+          'other': (0, 0, 0),
+          'bg': (187, 173, 160)}
 
-# load in player info in beginning
-file = open(r"D:\pygame\JetpackJoyridePython\player_info.txt","r")
-read = file.readlines()
-high_score = int(read[0])
-lifetime = int(read[1])
+# game variables initialize
+board_values = [[0 for _ in range(4)] for _ in range(4)]
+game_over = False
+spawn_new = True
+init_count = 0
+direction = ''
+score = 0
+file = open(r"D:\pygame\Pygame2048\high_score.txt", "r")
+
+init_high = int(file.readline())
 file.close()
+high_score = init_high
 
 
-# all the code to move lines across screen and draw bg images
-def draw_screen(line_list, lase):
-    screen.fill('black')
-    pygame.draw.rect(surface, (bg_color[0], bg_color[1], bg_color[2], 50), [0, 0, WIDTH, HEIGHT])
-    screen.blit(surface, (0, 0))
-    top = pygame.draw.rect(screen, 'gray', [0, 0, WIDTH, 50])
-    bot = pygame.draw.rect(screen, 'gray', [0, HEIGHT - 50, WIDTH, 50])
-    for i in range(len(line_list)):
-        pygame.draw.line(screen, 'black', (line_list[i], 0), (line_list[i], 50), 3)
-        pygame.draw.line(screen, 'black', (line_list[i], HEIGHT - 50), (line_list[i], HEIGHT), 3)
-        if not pause:
-            line_list[i] -= game_speed
-            lase[0][0] -= game_speed
-            lase[1][0] -= game_speed
-        if line_list[i] < 0:
-            line_list[i] = WIDTH
-    lase_line = pygame.draw.line(screen, 'yellow', (lase[0][0], lase[0][1]), (lase[1][0], lase[1][1]), 10)
-    pygame.draw.circle(screen, 'yellow', (lase[0][0], lase[0][1]), 12)
-    pygame.draw.circle(screen, 'yellow', (lase[1][0], lase[1][1]), 12)
-    screen.blit(font.render(f'Distance: {int(distance)} m', True, 'white'), (10, 10))
-    screen.blit(font.render(f'High Score: {int(high_score)} m', True, 'white'), (10, 70))
-    return line_list, top, bot, lase, lase_line
+# draw game over and restart text
+def draw_over():
+    pygame.draw.rect(screen, 'black', [50, 50, 300, 100], 0, 10)
+    game_over_text1 = font.render('Game Over!', True, 'white')
+    game_over_text2 = font.render('Press Enter to Restart', True, 'white')
+    screen.blit(game_over_text1, (130, 65))
+    screen.blit(game_over_text2, (70, 105))
 
 
-# draw player including animated states
-def draw_player():
-    play = pygame.rect.Rect((120, player_y + 10), (25, 60))
-    # pygame.draw.rect(screen, 'green', play, 5)
-    if player_y < init_y or pause:
-        if booster:
-            pygame.draw.ellipse(screen, 'red', [100, player_y + 50, 20, 30])
-            pygame.draw.ellipse(screen, 'orange', [105, player_y + 50, 10, 30])
-            pygame.draw.ellipse(screen, 'yellow', [110, player_y + 50, 5, 30])
-        pygame.draw.rect(screen, 'yellow', [128, player_y + 60, 10, 20], 0, 3)
-        pygame.draw.rect(screen, 'orange', [130, player_y + 60, 10, 20], 0, 3)
-    else:
-        if counter < 10:
-            pygame.draw.line(screen, 'yellow', (128, player_y + 60), (140, player_y + 80), 10)
-            pygame.draw.line(screen, 'orange', (130, player_y + 60), (120, player_y + 80), 10)
-        elif 10 <= counter < 20:
-            pygame.draw.rect(screen, 'yellow', [128, player_y + 60, 10, 20], 0, 3)
-            pygame.draw.rect(screen, 'orange', [130, player_y + 60, 10, 20], 0, 3)
-        elif 20 <= counter < 30:
-            pygame.draw.line(screen, 'yellow', (128, player_y + 60), (120, player_y + 80), 10)
-            pygame.draw.line(screen, 'orange', (130, player_y + 60), (140, player_y + 80), 10)
-        else:
-            pygame.draw.rect(screen, 'yellow', [128, player_y + 60, 10, 20], 0, 3)
-            pygame.draw.rect(screen, 'orange', [130, player_y + 60, 10, 20], 0, 3)
-    # jetpack, body and head
-    pygame.draw.rect(screen, 'white', [100, player_y + 20, 20, 30], 0, 5)
-    pygame.draw.ellipse(screen, 'orange', [120, player_y + 20, 30, 50])
-    pygame.draw.circle(screen, 'orange', (135, player_y + 15), 10)
-    pygame.draw.circle(screen, 'black', (138, player_y + 12), 3)
-    return play
+# take your turn based on direction
+def take_turn(direc, board):
+    global score
+    merged = [[False for _ in range(4)] for _ in range(4)]
+    if direc == 'UP':
+        for i in range(4):
+            for j in range(4):
+                shift = 0
+                if i > 0:
+                    for q in range(i):
+                        if board[q][j] == 0:
+                            shift += 1
+                    if shift > 0:
+                        board[i - shift][j] = board[i][j]
+                        board[i][j] = 0
+                    if board[i - shift - 1][j] == board[i - shift][j] and not merged[i - shift][j] \
+                            and not merged[i - shift - 1][j]:
+                        board[i - shift - 1][j] *= 2
+                        score += board[i - shift - 1][j]
+                        board[i - shift][j] = 0
+                        merged[i - shift - 1][j] = True
+
+    elif direc == 'DOWN':
+        for i in range(3):
+            for j in range(4):
+                shift = 0
+                for q in range(i + 1):
+                    if board[3 - q][j] == 0:
+                        shift += 1
+                if shift > 0:
+                    board[2 - i + shift][j] = board[2 - i][j]
+                    board[2 - i][j] = 0
+                if 3 - i + shift <= 3:
+                    if board[2 - i + shift][j] == board[3 - i + shift][j] and not merged[3 - i + shift][j] \
+                            and not merged[2 - i + shift][j]:
+                        board[3 - i + shift][j] *= 2
+                        score += board[3 - i + shift][j]
+                        board[2 - i + shift][j] = 0
+                        merged[3 - i + shift][j] = True
+
+    elif direc == 'LEFT':
+        for i in range(4):
+            for j in range(4):
+                shift = 0
+                for q in range(j):
+                    if board[i][q] == 0:
+                        shift += 1
+                if shift > 0:
+                    board[i][j - shift] = board[i][j]
+                    board[i][j] = 0
+                if board[i][j - shift] == board[i][j - shift - 1] and not merged[i][j - shift - 1] \
+                        and not merged[i][j - shift]:
+                    board[i][j - shift - 1] *= 2
+                    score += board[i][j - shift - 1]
+                    board[i][j - shift] = 0
+                    merged[i][j - shift - 1] = True
+
+    elif direc == 'RIGHT':
+        for i in range(4):
+            for j in range(4):
+                shift = 0
+                for q in range(j):
+                    if board[i][3 - q] == 0:
+                        shift += 1
+                if shift > 0:
+                    board[i][3 - j + shift] = board[i][3 - j]
+                    board[i][3 - j] = 0
+                if 4 - j + shift <= 3:
+                    if board[i][4 - j + shift] == board[i][3 - j + shift] and not merged[i][4 - j + shift] \
+                            and not merged[i][3 - j + shift]:
+                        board[i][4 - j + shift] *= 2
+                        score += board[i][4 - j + shift]
+                        board[i][3 - j + shift] = 0
+                        merged[i][4 - j + shift] = True
+    return board
 
 
-def check_colliding():
-    coll = [False, False]
-    rstrt = False
-    if player.colliderect(bot_plat):
-        coll[0] = True
-    elif player.colliderect(top_plat):
-        coll[1] = True
-    if laser_line.colliderect(player):
-        rstrt = True
-    if rocket_active:
-        if rocket.colliderect(player):
-            rstrt = True
-    return coll, rstrt
-
-
-def generate_laser():
-    # 0 - horiz, 1 - vert
-    laser_type = random.randint(0, 1)
-    offset = random.randint(10, 300)
-    match laser_type:
-        case 0:
-            laser_width = random.randint(100, 300)
-            laser_y = random.randint(100, HEIGHT - 100)
-            new_lase = [[WIDTH + offset, laser_y], [WIDTH + offset + laser_width, laser_y]]
-        case 1:
-            laser_height = random.randint(100, 300)
-            laser_y = random.randint(100, HEIGHT - 400)
-            new_lase = [[WIDTH + offset, laser_y], [WIDTH + offset, laser_y + laser_height]]
-    return new_lase
-
-
-def draw_rocket(coords, mode):
-    if mode == 0:
-        rock = pygame.draw.rect(screen, 'dark red', [coords[0] - 60, coords[1] - 25, 50, 50], 0, 5)
-        screen.blit(font.render('!', True, 'black'), (coords[0] - 40, coords[1] - 20))
-        if not pause:
-            if coords[1] > player_y + 10:
-                coords[1] -= 3
+# spawn in new pieces randomly when turns start
+def new_pieces(board):
+    count = 0
+    full = False
+    while any(0 in row for row in board) and count < 1:
+        row = random.randint(0, 3)
+        col = random.randint(0, 3)
+        if board[row][col] == 0:
+            count += 1
+            if random.randint(1, 10) == 10:
+                board[row][col] = 4
             else:
-                coords[1] += 3
-    else:
-        rock = pygame.draw.rect(screen, 'red', [coords[0], coords[1] - 10, 50, 20], 0, 5)
-        pygame.draw.ellipse(screen, 'orange', [coords[0] + 50, coords[1] - 10, 50, 20], 7)
-        if not pause:
-            coords[0] -= 10 + game_speed
-
-    return coords, rock
+                board[row][col] = 2
+    if count < 1:
+        full = True
+    return board, full
 
 
-def draw_pause():
-    pygame.draw.rect(surface, (128, 128, 128, 150), [0, 0, WIDTH, HEIGHT])
-    pygame.draw.rect(surface, 'dark gray', [200, 150, 600, 50], 0, 10)
-    surface.blit(font.render('Game Paused. Escape Btn Resumes', True, 'black'), (220, 160))
-    restart_btn = pygame.draw.rect(surface, 'white', [200, 220, 280, 50], 0, 10)
-    surface.blit(font.render('Restart', True, 'black'), (220, 230))
-    quit_btn = pygame.draw.rect(surface, 'white', [520, 220, 280, 50], 0, 10)
-    surface.blit(font.render('Quit', True, 'black'), (540, 230))
-    pygame.draw.rect(surface, 'dark gray', [200, 300, 600, 50], 0, 10)
-    surface.blit(font.render(f'Lifetime Distance Ran: {int(lifetime)}', True, 'black'), (220, 310))
-    screen.blit(surface, (0, 0))
-    return restart_btn, quit_btn
+# draw background for the board
+def draw_board():
+    pygame.draw.rect(screen, colors['bg'], [0, 0, 400, 400], 0, 10)
+    score_text = font.render(f'Score: {score}', True, 'black')
+    high_score_text = font.render(f'High Score: {high_score}', True, 'black')
+    screen.blit(score_text, (10, 410))
+    screen.blit(high_score_text, (10, 450))
+    pass
 
 
-def modify_player_info():
-    global high_score, lifetime
-    if distance > high_score:
-        high_score = distance
-    lifetime += distance
-    file = open('player_info.txt', 'w')
-    file.write(str(int(high_score)) + '\n')
-    file.write(str(int(lifetime)))
-    file.close()
+# draw tiles for game
+def draw_pieces(board):
+    for i in range(4):
+        for j in range(4):
+            value = board[i][j]
+            if value > 8:
+                value_color = colors['light text']
+            else:
+                value_color = colors['dark text']
+            if value <= 2048:
+                color = colors[value]
+            else:
+                color = colors['other']
+            pygame.draw.rect(screen, color, [j * 95 + 20, i * 95 + 20, 75, 75], 0, 5)
+            if value > 0:
+                value_len = len(str(value))
+                font = pygame.font.Font('freesansbold.ttf', 48 - (5 * value_len))
+                value_text = font.render(str(value), True, value_color)
+                text_rect = value_text.get_rect(center=(j * 95 + 57, i * 95 + 57))
+                screen.blit(value_text, text_rect)
+                pygame.draw.rect(screen, 'black', [j * 95 + 20, i * 95 + 20, 75, 75], 2, 5)
 
 
+# main game loop
 run = True
 while run:
     timer.tick(fps)
-    if counter < 40:
-        counter += 1
-    else:
-        counter = 0
-    if new_laser:
-        laser = generate_laser()
-        new_laser = False
-    lines, top_plat, bot_plat, laser, laser_line = draw_screen(lines, laser)
-    if pause:
-        restart, quits = draw_pause()
-
-    if not rocket_active and not pause:
-        rocket_counter += 1
-    if rocket_counter > 180:
-        rocket_counter = 0
-        rocket_active = True
-        rocket_delay = 0
-        rocket_coords = [WIDTH, HEIGHT/2]
-    if rocket_active:
-        if rocket_delay < 90:
-            if not pause:
-                rocket_delay += 1
-            rocket_coords, rocket = draw_rocket(rocket_coords, 0)
-        else:
-            rocket_coords, rocket = draw_rocket(rocket_coords, 1)
-        if rocket_coords[0] < -50:
-            rocket_active = False
-
-    player = draw_player()
-    colliding, restart_cmd = check_colliding()
+    screen.fill('gray')
+    draw_board()
+    draw_pieces(board_values)
+    if spawn_new or init_count < 2:
+        board_values, game_over = new_pieces(board_values)
+        spawn_new = False
+        init_count += 1
+    if direction != '':
+        board_values = take_turn(direction, board_values)
+        direction = ''
+        spawn_new = True
+    if game_over:
+        draw_over()
+        if high_score > init_high:
+            file = open('high_score', 'w')
+            file.write(f'{high_score}')
+            file.close()
+            init_high = high_score
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            modify_player_info()
             run = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                if pause:
-                    pause = False
-                else:
-                    pause = True
-            if event.key == pygame.K_SPACE and not pause:
-                booster = True
         if event.type == pygame.KEYUP:
-            if event.key == pygame.K_SPACE:
-                booster = False
-        if event.type == pygame.MOUSEBUTTONDOWN and pause:
-            if restart.collidepoint(event.pos):
-                restart_cmd = True
-            if quits.collidepoint(event.pos):
-                modify_player_info()
-                run = False
+            if event.key == pygame.K_UP:
+                direction = 'UP'
+            elif event.key == pygame.K_DOWN:
+                direction = 'DOWN'
+            elif event.key == pygame.K_LEFT:
+                direction = 'LEFT'
+            elif event.key == pygame.K_RIGHT:
+                direction = 'RIGHT'
 
-    if not pause:
-        distance += game_speed
-        if booster:
-            y_velocity -= gravity
-        else:
-            y_velocity += gravity
-        if (colliding[0] and y_velocity > 0) or (colliding[1] and y_velocity < 0):
-            y_velocity = 0
-        player_y += y_velocity
+            if game_over:
+                if event.key == pygame.K_RETURN:
+                    board_values = [[0 for _ in range(4)] for _ in range(4)]
+                    spawn_new = True
+                    init_count = 0
+                    score = 0
+                    direction = ''
+                    game_over = False
 
-    # progressive speed increases
-    if distance < 50000:
-        game_speed = 1 + (distance // 500) / 10
-    else:
-        game_speed = 11
-
-    if laser[0][0] < 0 and laser[1][0] < 0:
-        new_laser = True
-
-    if distance - new_bg > 500:
-        new_bg = distance
-        bg_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-
-    if restart_cmd:
-        modify_player_info()
-        distance = 0
-        rocket_active = False
-        rocket_counter = 0
-        pause = False
-        player_y = init_y
-        y_velocity = 0
-        restart_cmd = 0
-        new_laser = True
-
-    if distance > high_score:
-        high_score = int(distance)
+    if score > high_score:
+        high_score = score
 
     pygame.display.flip()
 pygame.quit()
